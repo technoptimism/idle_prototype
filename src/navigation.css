@@ -1,0 +1,72 @@
+/* Keep action navigation beside the controls it changes. */
+.action-area { scroll-margin-top: 16px; }
+.action-area .action-tabs {
+  margin: 0 0 15px;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fcfaf4;
+  padding: 3px;
+}
+.action-area .action-tabs > button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-height: 42px;
+  border-radius: 4px;
+  padding: 9px 12px;
+  color: #52634f;
+}
+.action-area .action-tabs > button[aria-selected="true"] {
+  background: #dfe8d4;
+  color: #2f512a;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px #c7d6bb;
+}
+.action-area .action-tabs > button[aria-selected="true"]::after { display: none; }
+.action-panel, [data-card-id] { scroll-margin-top: 80px; }
+.guided-target {
+  outline: 2px solid var(--rust) !important;
+  outline-offset: 3px !important;
+}
+.guided-target::before {
+  content: 'Next step';
+  display: block;
+  width: fit-content;
+  color: #8d422b;
+  background: #f3e4d7;
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+.next-step-button {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #95492f;
+  border-radius: 4px;
+  background: var(--rust);
+  color: #fff4e1;
+  font-size: 12px;
+}
+.next-step-button:hover { background: #9e4c32; }
+.next-milestone .milestone-button + .next-step-button { margin-top: 8px; }
+.next-step-location {
+  display: block;
+  margin-top: 8px;
+  color: #5c7151;
+  font-size: 10px;
+}
+@media (max-width: 650px) {
+  .action-area .action-tabs > button { min-height: 42px; gap: 6px; }
+  .next-milestone { order: 1; }
+  .world-card { order: 2; }
+}

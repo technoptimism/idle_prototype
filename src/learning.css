@@ -1,0 +1,37 @@
+.learning-chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 0 12px;
+  color: #536b48;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.learning-chapter > span {
+  color: #738267;
+  font: 10px monospace;
+}
+.learning-lesson { color: #536a49; }
+.learning-route { border-top: 1px solid #d2ddc6; margin-top: 8px; padding-top: 4px; }
+.learning-route > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 11px;
+  color: #536b48;
+}
+.learning-route[open] > summary svg { transform: rotate(180deg); }
+.learning-route > ol {
+  margin: 5px 0 9px;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #5f7553;
+}
+.learning-route li { padding: 4px 0; }
+button.guided-target::before, .living-condition-bar.guided-target::before { display: none; }
+@media (max-width: 650px) {
+  .learning-chapter { flex-direction: row; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; }
+  .learning-route > summary { min-height: 38px; }
+}

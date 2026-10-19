@@ -1,0 +1,76 @@
+.cosmic-systems{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0}
+.cosmic-panel{border:1px solid #d9ddd0;background:#faf9f1;border-radius:7px;padding:16px;min-width:0}
+.cosmic-panel__heading{display:flex;align-items:center;gap:8px;margin-bottom:14px;color:#637656}
+.cosmic-panel__heading>svg{flex-shrink:0}
+.cosmic-panel__heading h3{font-family:var(--serif);font-size:21px;letter-spacing:-.35px;color:var(--ink);margin:0;font-weight:400;line-height:1.25}
+.cosmic-panel__count{font-size:10px;color:#65745c;margin-left:auto;text-align:right;line-height:1.5;max-width:100px}
+.cosmic-one-line,.cosmic-empty{font-size:12px;line-height:1.6;color:#63735b;margin:0}
+.cosmic-details{margin-top:12px;border-top:1px solid #e1e4d8;padding-top:10px;font-size:12px;color:#65745c}
+.cosmic-details>summary{cursor:pointer;min-height:28px;line-height:1.7;font-size:11px;color:#596f4f}
+.cosmic-details p,.cosmic-details li{font-size:12px;line-height:1.7;color:#65745c}
+.cosmic-details p{margin:9px 0 0}
+.cosmic-details ul{margin:9px 0 0;padding-left:18px}
+.cosmic-condition-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px 18px}
+.cosmic-condition{min-width:0}
+.cosmic-condition>div:first-child{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#5d6c54;margin-bottom:8px;line-height:1.4}
+.cosmic-condition strong{font:16px var(--serif);color:#5d6d51;white-space:nowrap}
+.cosmic-condition__track{height:5px;background:#e3e6da;position:relative;border-radius:4px}
+.cosmic-condition__track>i{display:block;height:100%;border-radius:4px;background:#a79774;transition:width .3s}
+.cosmic-condition.is-ready .cosmic-condition__track>i{background:#7c966d}
+.cosmic-condition__track>span{position:absolute;top:-3px;width:1px;height:11px;background:#66755c}
+.protostar-list{margin-top:15px}
+.protostar-timer{display:grid;grid-template-columns:1fr auto;gap:7px;padding:10px 0;border-top:1px solid #e0e3d6}
+.protostar-timer strong{font-size:11px;font-weight:500;color:#596c50}
+.protostar-timer>span{font-size:10px;white-space:nowrap;color:#806c4e}
+.protostar-track{height:3px;border-radius:4px;background:#e8e2d2;overflow:hidden;grid-column:1/-1}
+.protostar-track>i{display:block;height:100%;background:#ba9263;transition:width .3s}
+.construction-stages{display:flex;list-style:none;padding:0;margin:0 0 17px;gap:5px}
+.construction-stages li{flex:1;min-width:0;color:#79846f;display:flex;flex-direction:column;gap:6px;font-size:10px;line-height:1.4}
+.construction-stages__number{display:grid;place-items:center;border:1px solid #d7ddce;border-radius:50%;width:20px;height:20px;font:10px monospace;background:#f2f2e9}
+.construction-stages li.is-complete{color:#587247}
+.construction-stages li.is-complete .construction-stages__number{background:#e3ead9;border-color:#bcccad}
+.construction-stages li.is-next{color:#98643e}
+.construction-stages li.is-next .construction-stages__number{background:#f0e4d4;border-color:#d5b98e}
+.construction-purchase{display:grid;gap:10px}
+.construction-purchase h4{font:18px var(--serif);margin:0;color:#415941}
+.construction-purchase p{font-size:12px;line-height:1.6;color:#63755c;margin:4px 0 0}
+.cosmic-costs{display:flex;flex-wrap:wrap;gap:5px}
+.cosmic-costs>span{padding:4px 6px;background:#f0e6d9;color:#825132;font-size:11px;line-height:1.5;border-radius:3px}
+.cosmic-costs>span.affordable{color:#506b43;background:#e8eedf}
+.cosmic-costs b{font:12px var(--serif);font-weight:600}
+.cosmic-costs small{font:10px inherit}
+.cosmic-action{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid #bcccad;background:#e0e9d5;color:#48613c;border-radius:4px;padding:10px 11px;min-height:44px;width:100%;text-align:left;font-size:12px;line-height:1.5}
+.cosmic-action:not(:disabled):hover{background:#d3e0c7}
+.cosmic-action:disabled{background:#eceee4;border-color:#d9dfcd;color:#6a775f}
+.profile-grid{display:grid;grid-template-columns:1fr;gap:7px;margin-top:8px}
+.profile-choice{display:flex;flex-direction:column;text-align:left;border:1px solid #dce1d3;background:#f7f6ed;border-radius:5px;padding:11px;gap:6px;color:#647359;min-width:0}
+.profile-choice:hover{background:#f0f2e7;border-color:#b9c6ac}
+.profile-choice.is-selected{background:#eaf0df;border-color:#9cae88}
+.profile-choice__heading{display:flex;align-items:center;justify-content:space-between;gap:6px;color:#536d46}
+.profile-choice__heading strong{font-size:12px;font-weight:500}
+.profile-choice__heading>svg{flex-shrink:0}
+.profile-choice>span:last-child{font-size:11px;line-height:1.6}
+.world-inheritance{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;font-size:11px;line-height:1.5;color:#5e7053}
+.world-inheritance>span{padding:4px 6px;border-radius:3px;border:1px solid #e0e5d7;background:#f1f3e9}
+.planetary-inventory{display:flex;gap:12px;flex-wrap:wrap;border-top:1px solid #e0e4d6;margin-top:16px;padding-top:11px;color:#5e7255}
+.planetary-inventory>span{display:flex;align-items:center;gap:5px;font-size:11px;line-height:1.5}
+.planetary-inventory strong{font:16px var(--serif);color:#4f7259}
+.planetary-inventory small{font-size:10px;color:#63765a}
+.condition-recovery{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.condition-recovery button{font-size:11px;padding:9px 10px;min-height:44px;line-height:1.5}
+.condition-recovery>span{font-size:11px;line-height:1.5;color:#65755a}
+.discovery-notebook{grid-column:1/-1}
+.discovery-notebook>summary{display:flex;align-items:center;gap:8px;cursor:pointer;min-height:28px;color:#5e7451;list-style:none;font-size:12px}
+.discovery-notebook>summary::-webkit-details-marker{display:none}
+.discovery-notebook>summary:after{content:'+';font-size:16px;margin-left:5px}
+.discovery-notebook[open]>summary:after{content:'−'}
+.discovery-notebook>summary>small{margin-left:auto;font-size:11px}
+.discovery-trail{display:grid;grid-template-columns:1fr 1fr;gap:13px 16px;margin-top:16px}
+.discovery-trail>div{display:flex;gap:7px;align-items:flex-start;color:#7a8472}
+.discovery-trail>div>span{margin-top:2px}
+.discovery-trail strong{font-size:12px;font-weight:500;display:block;line-height:1.5}
+.discovery-trail small{font-size:11px;display:block;line-height:1.7;margin-top:3px;color:#66735c}
+.discovery-trail .is-observed{color:#527244}
+@media(max-width:900px){.cosmic-systems{grid-template-columns:1fr}.cosmic-panel__heading h3{font-size:20px}.discovery-trail{grid-template-columns:1fr 1fr}}
+@media(max-width:420px){.cosmic-panel{padding:14px}.cosmic-condition-grid{gap:15px 12px}.cosmic-panel__heading h3{font-size:19px}.cosmic-panel__count{max-width:84px}.discovery-trail{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.cosmic-condition__track>i,.protostar-track>i{transition:none}}
