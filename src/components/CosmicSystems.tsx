@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Check, ChevronRight, Circle, Droplets, Globe2, Orbit, Sparkles, Wind } from 'lucide-react';
 import {
   BALANCE, DEFINITION_MAP, DISCOVERIES, DISCOVERY_IDS, PROFILE_DEFINITIONS, RESOURCES, UPGRADES,
@@ -6,7 +7,7 @@ import {
 import type { Action, Cost, GameState, Phase, ResourceId } from '../game';
 import './cosmic-systems.css';
 
-type Props = { game: GameState; phase: Phase; dispatch: (action: Action) => unknown };
+type Props = { game: GameState; phase: Phase; dispatch: (action: Action) => unknown; focusPanel?: string; onSelect?: (id: string) => void };
 type Condition = { id: string; name: string; value: number; target: number };
 
 const stages = [
@@ -68,7 +69,7 @@ function Construction({ game, dispatch }: Pick<Props, 'game' | 'dispatch'>) {
 function PlanetProfile({ game, dispatch }: Pick<Props, 'game' | 'dispatch'>) {
   const effects = worldEffects(game);
   const selected = PROFILE_DEFINITIONS.find(profile => profile.id === game.planet.profile)!;
-  return <section className="cosmic-panel planet-profiles">
+  return <section className="cosmic-panel planet-profiles" data-card-id="planet-profiles" tabIndex={-1} aria-label="World profile">
     <div className="cosmic-panel__heading"><Orbit size={17} /><h3>{selected.name}</h3></div>
     <p className="cosmic-one-line">{profileBenefits[selected.id]}</p>
     <details className="cosmic-details"><summary>Change world profile · free</summary>
@@ -106,27 +107,40 @@ function PlanetEnvironment({ game, dispatch }: Pick<Props, 'game' | 'dispatch'>)
   </section>;
 }
 
-export default function CosmicSystems({ game, phase, dispatch }: Props) {
+export default function CosmicSystems({ game, phase, dispatch, focusPanel, onSelect }: Props) {
   const stage = planetStage(game);
   const hasClouds = (game.buildings.cloud ?? 0) > 0 || game.cosmos.discoveries.includes('cloud');
-  const hasStellarProgress = hasClouds || game.cosmos.protostars.length > 0 || (game.buildings.stableStar ?? 0) > 0 || (game.buildings.redDwarf ?? 0) > 0;
+  const hasStellarProgress = hasClouds || focusPanel === 'stellar-nursery' || game.cosmos.protostars.length > 0 || (game.buildings.stableStar ?? 0) > 0 || (game.buildings.redDwarf ?? 0) > 0;
   const hasElements = game.stats.supernovae > 0 || stage > 0 || game.resources.carbon > 0;
-  if (!hasStellarProgress && !hasElements && game.cosmos.discoveries.length === 0) return <p className="cosmic-empty">Gather gas and build a cloud to begin shaping your world.</p>;
-  return <div className="cosmic-systems" aria-label={phase > 0 ? 'Your inherited world' : 'Your star system'}>
-    {hasStellarProgress && <section className="cosmic-panel stellar-nursery" data-card-id="stellar-nursery" tabIndex={-1} aria-label="Stellar nursery">
+  const inspectConstruction = focusPanel === 'planet-construction';
+  if (!hasStellarProgress && !hasElements && !inspectConstruction && game.cosmos.discoveries.length === 0) return <p className="cosmic-empty">Gather gas and build a cloud to begin shaping your world.</p>;
+  const panels: Array<{ id: string; name: string; content: ReactNode }> = [];
+  if (hasStellarProgress) panels.push({ id: 'stellar-nursery', name: 'Nursery', content: <section className="cosmic-panel stellar-nursery" data-card-id="stellar-nursery" tabIndex={-1} aria-label="Stellar nursery">
       <div className="cosmic-panel__heading"><Wind size={17} /><h3>Stellar nursery</h3><span className="cosmic-panel__count">{game.buildings.cloud ?? 0} clouds ready</span></div>
       <div className="cosmic-condition-grid">{cloudConditions(game).map(condition => <ConditionMeter key={condition.id} condition={condition} />)}</div>
+      {!game.buildings.cloud && game.cosmos.protostars.length === 0 && onSelect && <button className="secondary-button" onClick={() => onSelect('cloud')}>Prepare a gas cloud <ChevronRight size={14}/></button>}
       {game.cosmos.protostars.length > 0 && <div className="protostar-list">{game.cosmos.protostars.map(star => <div className="protostar-timer" key={star.id}>
         <strong>{DEFINITION_MAP[star.kind]?.name ?? star.kind}</strong><span>{fmt(protostarSeconds(game, star), 0)}s to ignition</span><div className="protostar-track" role="progressbar" aria-label={`${DEFINITION_MAP[star.kind]?.name ?? star.kind} formation`} aria-valuenow={Math.round(percent((1 - star.remaining / star.total) * 100))} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${percent((1 - star.remaining / star.total) * 100)}%` }} /></div>
       </div>)}</div>}
       <details className="cosmic-details"><summary>Star formation details</summary><p>Gravity draws gas together. Cooling allows collapse; fusion begins under stellar conditions. The markers show Sun-like star thresholds.</p><ul>{cloudConditions(game).map(condition => <li key={condition.id}>{condition.name}: {fmt(condition.value)}% / {fmt(condition.target)}%{condition.value >= condition.target ? ' · met' : ` · ${fmt(condition.target - condition.value)}% missing`}</li>)}</ul><p>Each protostar uses {BALANCE.protostarHydrogen} hydrogen/s. Gas shortages slow growth without losing progress. Stellar times and quantities are gameplay abstractions.</p><p>Stable stars sustain production. Massive stars release elements made during stellar life, plus some formed in the supernova.</p></details>
-    </section>}
-    {hasElements && <><Construction game={game} dispatch={dispatch} /><PlanetProfile game={game} dispatch={dispatch} /></>}
-    {stage > 0 && <PlanetEnvironment game={game} dispatch={dispatch} />}
-    {game.cosmos.discoveries.length > 0 && <details className="cosmic-panel discovery-notebook"><summary><Sparkles size={16} /><span>Discovery notebook</span><small>{game.cosmos.discoveries.length} / {DISCOVERY_IDS.length}</small></summary><div className="discovery-trail">{DISCOVERY_IDS.map(id => {
+    </section> });
+  if (hasElements || inspectConstruction) {
+    panels.push({ id: 'planet-construction', name: 'Build planet', content: <Construction game={game} dispatch={dispatch}/> });
+  }
+  if (hasElements) {
+    panels.push({ id: 'planet-profiles', name: 'World profile', content: <PlanetProfile game={game} dispatch={dispatch}/> });
+  }
+  if (stage > 0) panels.push({ id: 'planet-environment', name: 'Conditions', content: <PlanetEnvironment game={game} dispatch={dispatch}/> });
+  if (game.cosmos.discoveries.length > 0) panels.push({ id: 'discovery-notebook', name: 'Discoveries', content: <details className="cosmic-panel discovery-notebook" data-card-id="discovery-notebook" tabIndex={-1}><summary><Sparkles size={16} /><span>Discovery notebook</span><small>{game.cosmos.discoveries.length} / {DISCOVERY_IDS.length}</small></summary><div className="discovery-trail">{DISCOVERY_IDS.map(id => {
       const observed = game.cosmos.discoveries.includes(id);
       const research = UPGRADES.filter(def => def.discoveries?.includes(id)).map(def => def.name).join(', ');
       return <div className={observed ? 'is-observed' : ''} key={id}><span>{observed ? <Check size={12} /> : <Circle size={12} />}</span><div><strong>{DISCOVERIES[id].name}</strong><small>{observed && research ? research : DISCOVERIES[id].description}</small></div></div>;
-    })}</div></details>}
+    })}</div></details> });
+  const selected = panels.find(panel => panel.id === focusPanel) ?? panels[0];
+  const others = panels.filter(panel => panel !== selected);
+  return <div className="cosmic-systems" aria-label={phase > 0 ? 'Your inherited world' : 'Your star system'}>
+    {onSelect && <div className="world-picker">{panels.map(panel => <button key={panel.id} aria-pressed={selected?.id === panel.id} onClick={() => onSelect(panel.id)}>{panel.name}</button>)}</div>}
+    {selected?.content}
+    {others.length > 0 && <details className="other-world-systems"><summary>Other world systems <span>{others.length}</span></summary><div>{others.map(panel => <div key={panel.id}>{panel.content}</div>)}</div></details>}
   </div>;
 }

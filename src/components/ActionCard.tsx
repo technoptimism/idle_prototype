@@ -4,8 +4,8 @@ import type { Cost, Definition, GameState, ResourceId } from '../game';
 import { briefEffect, formatAmount, shortRequirement } from '../ui';
 import './action-card.css';
 
-export function CostTokens({ cost, game }: { cost: Cost; game: GameState }) {
-  return <div className="cost-tokens cost-line" aria-label="Purchase cost">{Object.entries(cost).map(([key, amount]) => {
+export function CostTokens({ cost, game, label = 'Purchase cost' }: { cost: Cost; game: GameState; label?: string }) {
+  return <div className="cost-tokens cost-line" aria-label={label}>{Object.entries(cost).map(([key, amount]) => {
     const id = key as ResourceId;
     return <span className={game.resources[id] + 1e-8 >= amount! ? 'affordable' : 'unaffordable'} key={id} aria-label={`${formatAmount(amount!, 1)} ${RESOURCES[id].name}`}>
       <span className="cost-symbol" aria-hidden="true">{RESOURCES[id].symbol}</span><span aria-hidden="true">{formatAmount(amount!, 1)}</span>

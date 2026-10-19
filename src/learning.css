@@ -12,6 +12,7 @@
   font: 10px monospace;
 }
 .learning-lesson { color: #536a49; }
+.learning-count { margin: 9px 0 0; color: #536b48; font: 11px monospace; }
 .learning-route { border-top: 1px solid #d2ddc6; margin-top: 8px; padding-top: 4px; }
 .learning-route > summary {
   display: flex;

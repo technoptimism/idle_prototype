@@ -117,7 +117,7 @@ export function getLearningJourney(game: GameState): LearningJourney {
     };
   } };
   const habitat: Lesson = purchase('tidalPools', 'Prebiotic habitats improve chemistry; any of the three settings works.', 1, HABITAT_IDS.some(id => own(game, id) > 0), 'Develop a prebiotic habitat');
-  const strategy: Lesson = purchase('metabolism', 'Efficiency lowers resource demand; faster reproduction is an equally valid first choice.', 1, own(game, 'reproduction') > 0, 'Improve efficiency or reproduction');
+  const strategy: Lesson = purchase('metabolism', 'Efficiency lowers resource demand; faster reproduction is an equally valid first choice.', 1, own(game, 'reproduction') > 0 || hasLineage(game, 'eukaryotes'), 'Improve efficiency or reproduction');
   const healthy = (id: string, target: number, skip = false) => condition(id, `Support a ${target}% healthy biosphere`, 'Healthy ecosystems support both biological growth and human civilization.', [{ name: 'Biosphere health', value: game.health, target }], { phase: game.phase, view: 'world', cardId: 'biosphere-care', label: 'Tend the biosphere' }, skip, { type: 'restore' });
 
   const conditions = (EXTRA_REQUIREMENTS.abiogenesis ?? []).flatMap(requirement => requirement.kind === 'condition'
@@ -125,12 +125,12 @@ export function getLearningJourney(game: GameState): LearningJourney {
     : requirement.kind === 'habitability' ? [{ name: 'Habitability', value: game.habitability, target: requirement.amount }] : []);
 
   const chapters: Chapter[] = [
-    { name: 'Gather & automate', complete: seeded || enriched || alive, lessons: [
+    { name: 'Gather & automate', complete: mature || enriched || alive, lessons: [
       gather,
-      purchase('collector', 'A collector gathers hydrogen every second, even while you visit another screen.'),
-      purchase('collector', 'More collectors let you build while hydrogen keeps flowing.', 3),
-      purchase('collection', 'Collection research strengthens automation and each manual tap.'),
-      purchase('cloud', 'Gravity brings your collected gas together into a stellar nursery.'),
+      purchase('collector', 'A collector gathers hydrogen every second, even while you visit another screen.', 1, seeded),
+      purchase('collector', 'More collectors let you build while hydrogen keeps flowing.', 3, seeded),
+      purchase('collection', 'Collection research strengthens automation and each manual tap.', 1, seeded),
+      purchase('cloud', 'Gravity brings your collected gas together into a stellar nursery.', 1, seeded),
       cloudReady('stableStar', seeded),
       purchase('stableStar', 'Choose sustained fusion to power a future world; a small stable star also works.'),
       ignition('stableStar', enriched),
@@ -159,14 +159,14 @@ export function getLearningJourney(game: GameState): LearningJourney {
       purchase('abiogenesis', 'Simple cells begin the biosphere; the exact origin of life remains an open scientific question.'),
     ] },
     { name: 'Grow a food web', complete: human || hasLineage(game, 'animals'), lessons: [
-      purchase('collector', 'The growing biosphere still depends on hydrogen supplied by the cosmic system.', 10, hasLineage(game, 'eukaryotes')),
-      purchase('collection', 'Improve the supply that feeds every earlier planetary process.', 2, hasLineage(game, 'eukaryotes')),
-      purchase('pond', 'More chemistry supports living populations without exhausting their inputs.', 3, hasLineage(game, 'eukaryotes')),
       purchase('colony', 'Each colony makes biomass and abstract evolution points while using water and compounds.', 2, hasLineage(game, 'eukaryotes')),
       purchase('photosynthesis', 'Light-capturing organisms support productive ecosystems and future consumers.'),
       purchase('producer', 'Producer habitats supply biomass and the food-web support that animal lineages will need.', 2, hasLineage(game, 'eukaryotes')),
       strategy,
       purchase('eukaryotes', 'Endosymbiosis establishes cellular partnerships and increases evolution-point output.'),
+      purchase('collector', 'The growing biosphere still depends on hydrogen supplied by the cosmic system.', 10, hasLineage(game, 'multicellular')),
+      purchase('collection', 'Improve the supply that feeds every earlier planetary process.', 2, hasLineage(game, 'multicellular')),
+      purchase('pond', 'More chemistry supports living populations without exhausting their inputs.', 3, hasLineage(game, 'multicellular')),
       purchase('colony', 'Expand the persistent microbial foundation before building more complex life.', 7, hasLineage(game, 'multicellular')),
       purchase('metabolism', 'Lower input demand lets a larger biosphere grow on the same planetary chemistry.', 3, hasLineage(game, 'multicellular')),
       purchase('reproduction', 'Faster reproduction increases output, with greater water and prebiotic demand.', 3, hasLineage(game, 'multicellular')),
@@ -190,6 +190,7 @@ export function getLearningJourney(game: GameState): LearningJourney {
     { name: 'Support a settlement', complete: game.completed || own(game, 'industry') > 0, lessons: [
       purchase('workshop', 'Workshops convert planetary elements and biomass into construction materials.'),
       purchase('agriculture', 'Cultivation improves food production while depending on soil, water, and ecosystems.'),
+      purchase('workshop', 'Expand material production before using it to build farms and housing.', 3, own(game, 'writing') > 0),
       purchase('farm', 'A food surplus lets people grow; farms still need a healthy biosphere.', 4, own(game, 'writing') > 0),
       purchase('house', 'Food and housing together determine how many people your settlement can support.', 4, own(game, 'writing') > 0),
       purchase('workshop', 'More material production supports schools, restoration, and later infrastructure.', 5, own(game, 'writing') > 0),

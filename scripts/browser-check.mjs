@@ -28,7 +28,18 @@ async function section(name) {
 
 async function revealControl(name, sectionName) {
   if(sectionName) await section(sectionName);
-  const control=page.getByRole('button',{name,exact:true,includeHidden:true});
+  // Inspect the object through the same compact picker a player uses. The complete
+  // catalogs remain a fallback for controls that live in World disclosures.
+  if(typeof name==='string'&&/^(Build|Unlock|Improve) /.test(name)) {
+    const label=`Inspect ${name.replace(/^(Build|Unlock|Improve) /,'')}`;
+    const inspect=page.locator('.object-picker').getByRole('button',{name:label,exact:true});
+    if(await inspect.count()) await inspect.click();
+    else {
+      const mapNode=page.locator('.evolution-map').getByRole('button',{name:label,exact:true});
+      if(await mapNode.count()) await mapNode.click();
+    }
+  }
+  const control=page.getByRole('button',{name,exact:true,includeHidden:true}).first();
   await control.waitFor({state:'attached'});
   // Open disclosures with the same keyboard/touch-accessible summaries players use.
   const ancestors=await control.locator('xpath=ancestor::details').all();
@@ -39,12 +50,36 @@ async function revealControl(name, sectionName) {
   return control;
 }
 
+async function storedState(slot='normal') {
+  await page.getByRole('button',{name:'Save progress',exact:true}).click();
+  return page.evaluate(slot=>JSON.parse(localStorage.getItem(`stardust-to-civilization:${slot}:v1`)).state,slot);
+}
+
+function unchangedPurchases(before,after,message) {
+  for(const key of ['buildings','upgrades','automation']) assert.deepEqual(after[key],before[key],`${message}: ${key}`);
+  assert.equal(after.stats.taps,before.stats.taps,`${message}: selection does not gather`);
+}
+
 async function purchase(name, sectionName) {
   await (await revealControl(name,sectionName)).click();
 }
 
+async function revealCard(id) {
+  const card=page.locator(`[data-card-id="${id}"]`);
+  await card.waitFor({state:'attached'});
+  for(const detail of await card.locator('xpath=ancestor::details').all()) {
+    if(!await detail.evaluate(node=>node.open)) await detail.locator(':scope > summary').click();
+  }
+  await card.waitFor({state:'visible'});
+  return card;
+}
+
 async function openDetails(label) {
   const summary=page.locator('summary').filter({hasText:label}).first();
+  await summary.waitFor({state:'attached'});
+  for(const detail of await summary.locator('xpath=ancestor::details').all()) {
+    if(!await detail.evaluate(node=>node.open)) await detail.locator(':scope > summary').click();
+  }
   await summary.waitFor({state:'visible'});
   if(!await summary.locator('..').evaluate(node=>node.open)) await summary.click();
 }
@@ -56,6 +91,7 @@ async function chapter(name) {
 async function checkNavigationLocal(viewport) {
   const navigation=page.getByRole('navigation',{name:'Game chapters'});
   const actionTabs=page.getByRole('tablist',{name:'Game actions'});
+  const chapterDocumentTop=await navigation.evaluate(node=>node.getBoundingClientRect().top+scrollY);
   assert.equal(await actionTabs.evaluate(tabs=>tabs.parentElement.matches('.action-area')&&tabs.nextElementSibling.matches('.action-panel')),true,`${viewport}: Action tabs belong directly above their controls`);
   for(const [label,control] of [['Chapter navigation',navigation],['Action tabs',actionTabs]]) {
     const pinnedAncestor=await control.evaluate(node=>{
@@ -67,8 +103,8 @@ async function checkNavigationLocal(viewport) {
     assert.equal(pinnedAncestor,false,`${viewport}: ${label} scrolls naturally without a pinned toolbar`);
   }
   await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
-  const chapterBounds=await navigation.boundingBox();
-  assert.ok(chapterBounds&&chapterBounds.y+chapterBounds.height<=0,`${viewport}: Chapter navigation scrolls out of the viewport`);
+  const scrolledChapterDocumentTop=await navigation.evaluate(node=>node.getBoundingClientRect().top+scrollY);
+  assert.ok(Math.abs(chapterDocumentTop-scrolledChapterDocumentTop)<1,`${viewport}: Chapter navigation retains its document position while scrolling`);
   await actionTabs.evaluate(node=>node.scrollIntoView({block:'center'}));
   const selected=await actionTabs.getByRole('tab',{selected:true}).innerText();
   const build=actionTabs.getByRole('tab',{name:'Build',exact:true});
@@ -128,14 +164,101 @@ async function checkGatherConsistency(viewport) {
   await page.evaluate(()=>window.scrollTo(0,0));
 }
 
+async function checkEvolutionSelection(viewport) {
+  await section('Research');
+  const map=page.getByRole('region',{name:'Evolution web',exact:true});
+  await map.waitFor({state:'visible'});
+  assert.equal(await map.locator('[data-evolution-node]').count(),10,`${viewport}: The evolution web retains every major lineage`);
+  assert.ok(await map.locator('[data-edge-kind="ancestry"]').count()>0,`${viewport}: Ancestral connections are visible`);
+  assert.ok(await map.locator('[data-edge-kind="support"]').count()>0,`${viewport}: Ecological-support connections are visible`);
+  const ancestryDash=await map.locator('.evolution-map__ancestry').first().evaluate(node=>getComputedStyle(node).strokeDasharray);
+  const supportDash=await map.locator('.evolution-map__support').first().evaluate(node=>getComputedStyle(node).strokeDasharray);
+  assert.notEqual(ancestryDash,supportDash,`${viewport}: Ecological support and ancestry use different line styles`);
+  await map.screenshot({path:`artifacts/${viewport.toLowerCase()}-evolution-map.png`});
+  const before=await storedState('developer');
+  const humans=map.getByRole('button',{name:'Inspect Human communities',exact:true});
+  await humans.focus();
+  await page.keyboard.press('Enter');
+  await page.locator('[data-card-id="humans"]').waitFor({state:'visible'});
+  assert.equal(await humans.getAttribute('aria-pressed'),'true',`${viewport}: Keyboard selection marks the inspected lineage`);
+  assert.equal(await page.getByRole('button',{name:'Unlock Human communities',exact:true}).isDisabled(),true,`${viewport}: Inspecting humans cannot bypass ancestors or ecosystem prerequisites`);
+  unchangedPurchases(before,await storedState('developer'),`${viewport}: Evolution node selection is free`);
+  const humanBounds=await humans.boundingBox();
+  assert.ok(humanBounds&&humanBounds.width>=44&&humanBounds.height>=44,`${viewport}: Evolution nodes have usable touch targets`);
+  results.push(`${viewport}: Evolution web selects actual research with keyboard support, distinct ancestry/support edges, and enforced prerequisites`);
+}
+
+async function checkBiosphereScenery(state) {
+  const healthyGrass=await page.locator('.scene-art linearGradient[id$="-grass"] stop').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('stop-color')));
+  assert.equal(await page.locator('[data-scene-effect="industrial-haze"]').count(),0,'A healthy settlement has no biosphere-pressure haze');
+  // This isolated low-health fixture checks presentation; the legal journey separately
+  // proves that the economy and final objective are reachable without such fixtures.
+  const pressureContext=await browser.newContext({viewport:{width:1440,height:1050},reducedMotion:'reduce'});
+  try {
+    await pressureContext.addInitScript(state=>{
+      const now=Date.now();
+      localStorage.setItem('stardust-to-civilization:normal:v1',JSON.stringify({version:state.version,savedAt:now,state:{...state,health:25,lastSaved:now}}));
+    },state);
+    const pressurePage=await pressureContext.newPage();
+    pressurePage.on('pageerror',error=>errors.push(String(error)));
+    await pressurePage.goto(process.env.GAME_URL??'http://127.0.0.1:5173/');
+    await pressurePage.locator('.playable-scene.scene-under-pressure').waitFor({state:'visible'});
+    const haze=pressurePage.locator('[data-scene-effect="industrial-haze"]');
+    await haze.waitFor({state:'visible'});
+    assert.ok(Number(await haze.getAttribute('opacity'))>0,'Low biosphere health adds visible settlement haze');
+    const pressuredGrass=await pressurePage.locator('.scene-art linearGradient[id$="-grass"] stop').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('stop-color')));
+    assert.notDeepEqual(pressuredGrass,healthyGrass,'Vegetation colors respond to biosphere pressure');
+    await pressurePage.screenshot({path:'artifacts/desktop-biosphere-pressure.png',fullPage:true});
+    results.push('Isolated biosphere-pressure scenery shows changed vegetation and haze without altering the normal or developer game');
+  } finally { await pressureContext.close(); }
+}
+
+async function checkBiosphereInspector(viewport) {
+  await section('Build');
+  const before=await storedState('developer');
+  await page.locator('.world-card').getByRole('button',{name:/^Biosphere health /}).click();
+  const care=page.locator('[data-card-id="biosphere-inspector"]');
+  await care.waitFor({state:'visible'});
+  assert.equal(await page.getByRole('tab',{name:'World',exact:true}).getAttribute('aria-selected'),'true',`${viewport}: Scene health opens the World care inspector`);
+  unchangedPurchases(before,await storedState('developer'),`${viewport}: Inspecting biosphere health does not purchase or gather`);
+  const health=Number(await page.locator('.playable-scene').getAttribute('data-health'));
+  await care.getByRole('button',{name:'Restore biosphere · free',exact:true}).click();
+  const restored=await storedState('developer');
+  assert.ok(restored.health>health,`${viewport}: The care inspector performs ordinary free restoration`);
+  unchangedPurchases(before,restored,`${viewport}: Free restoration does not buy anything`);
+  await care.getByRole('button',{name:'Planetary conditions',exact:true}).click();
+  await page.locator('[data-card-id="planet-environment"]').waitFor({state:'visible'});
+  results.push(`${viewport}: Selecting biosphere health opens a working free-restoration inspector and links to planetary conditions`);
+}
+
 try {
   page.setDefaultTimeout(10000);
   await page.goto(process.env.GAME_URL??'http://127.0.0.1:5173/');
-  await page.getByRole('button',{name:'Gather hydrogen'}).waitFor();
+  await page.getByRole('button',{name:'Gather hydrogen',exact:true}).waitFor();
   presentation.freshVisibleWords=await page.evaluate(()=>document.body.innerText.trim().split(/\s+/).length);
   presentation.freshVisiblePurchaseCards=await page.locator('.purchase-card:visible').count();
   assert.ok(presentation.freshVisibleWords<=250,`Fresh game stays compact (${presentation.freshVisibleWords} visible words)`);
   assert.ok(presentation.freshVisiblePurchaseCards<=3,`Fresh game prioritizes near-term actions (${presentation.freshVisiblePurchaseCards} visible purchase cards)`);
+  const playableWorld=page.locator('.world-card');
+  await playableWorld.locator('.playable-scene').waitFor({state:'visible'});
+  await playableWorld.locator('.scene-gather.is-guided').waitFor({state:'visible'});
+  assert.equal(await page.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches),true,'Browser verification exercises reduced motion');
+  const movingSceneObjects=await playableWorld.locator('.playable-scene *').evaluateAll(nodes=>nodes.filter(node=>{
+    const style=getComputedStyle(node);
+    return style.animationName!=='none'&&style.animationDuration.split(',').some(value=>parseFloat(value)>.01);
+  }).map(node=>node.getAttribute('class')));
+  assert.deepEqual(movingSceneObjects,[],'Reduced motion preserves the scene without ongoing decorative animation');
+  const desktopWorld=await playableWorld.boundingBox();
+  const desktopInspector=await page.locator('.action-area').boundingBox();
+  assert.ok(desktopWorld&&desktopInspector&&desktopWorld.width>desktopInspector.width,'Desktop gives the playable world more space than its inspector');
+  const beforeInspect=await storedState();
+  await playableWorld.getByRole('button',{name:'Inspect Gas collector',exact:true}).click();
+  await page.locator('[data-card-id="collector"]').waitFor({state:'visible'});
+  const afterInspect=await storedState();
+  unchangedPurchases(beforeInspect,afterInspect,'Inspecting a scene object is free');
+  assert.deepEqual(afterInspect.resources,beforeInspect.resources,'Selecting an object does not award or spend resources');
+  assert.equal(await page.locator('.purchase-card:visible').count(),1,'The selected object has one visible purchase inspector');
+  results.push('Large playable world, free object selection, and a single contextual purchase inspector');
   assert.equal(await page.locator('.science-note p:visible').count(),0,'Long science explanations start collapsed');
   assert.equal(await page.locator('.history-card ol:visible').count(),0,'History starts collapsed');
   const learningPanel=page.locator('.next-milestone');
@@ -177,9 +300,12 @@ try {
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:'artifacts/desktop-cosmos.png'});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Desktop has no overflow');
-  for(let n=0;n<14;n++) await page.getByRole('button',{name:'Gather hydrogen'}).click();
+  await playableWorld.getByRole('button',{name:'Gather hydrogen from cloud',exact:true}).click();
+  await playableWorld.getByRole('button',{name:'Gather hydrogen from cloud',exact:true}).focus();
+  await page.keyboard.press('Enter');
+  for(let n=0;n<12;n++) await page.getByRole('button',{name:'Gather hydrogen',exact:true}).click();
   assert.equal(await learningPanel.locator('h2').innerText(),gatheringStep,'The first learning step stays current until its real resource threshold');
-  await page.getByRole('button',{name:'Gather hydrogen'}).click();
+  await page.getByRole('button',{name:'Gather hydrogen',exact:true}).click();
   const collectorStep=await learningPanel.locator('h2').innerText();
   assert.notEqual(collectorStep,gatheringStep,'Gathering 15 hydrogen advances to the collector lesson');
   await section('World');
@@ -188,6 +314,10 @@ try {
   await guidedCollector.waitFor({state:'visible'});
   assert.equal(await guidedCollector.evaluate(card=>card===document.activeElement||card.contains(document.activeElement)),true,'The next learning step focuses the collector purchase');
   await purchase('Build Gas collector','Build');
+  await playableWorld.locator('[data-scene-object="collector"][data-owned="1"]').waitFor({state:'visible'});
+  const collectorTarget=await playableWorld.getByRole('button',{name:'Inspect Gas collector',exact:true}).boundingBox();
+  assert.ok(collectorTarget&&collectorTarget.width>=44&&collectorTarget.height>=44,'Scene collectors provide usable touch targets');
+  results.push('Cloud pointer and keyboard gathering use ordinary taps; a purchased collector becomes visibly owned');
   assert.notEqual(await learningPanel.locator('h2').innerText(),collectorStep,'A real collector purchase advances to another small production step');
   await page.getByRole('button',{name:'Save progress',exact:true}).click();
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('stardust-to-civilization:normal:v1')));
@@ -195,7 +325,7 @@ try {
   assert.equal(saved.state.buildings.collector,1);
   assert.equal(saved.state.stats.taps,15);
   await page.reload();
-  await page.getByRole('button',{name:'Gather hydrogen'}).waitFor();
+  await page.getByRole('button',{name:'Gather hydrogen',exact:true}).waitFor();
   await page.keyboard.press('h');
   await page.getByRole('button',{name:'Save progress',exact:true}).click();
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('stardust-to-civilization:normal:v1')).state.stats.taps),16);
@@ -214,6 +344,11 @@ try {
   await page.clock.install();
   // Changing action tabs and reopening explanations must not affect elapsed production.
   await reloadWithState(saved.state);
+  const workingCollector=playableWorld.getByRole('button',{name:'Inspect Gas collector',exact:true});
+  await workingCollector.focus();
+  await page.clock.fastForward(5000);
+  assert.equal(await workingCollector.evaluate(node=>node===document.activeElement),true,'Scene controls retain keyboard focus while ordinary simulation renders');
+  results.push('Scene selection controls retain keyboard focus across production updates');
   await page.getByRole('button',{name:'Save progress',exact:true}).click();
   const beforeTabs=await page.evaluate(()=>JSON.parse(localStorage.getItem('stardust-to-civilization:normal:v1')).state);
   await section('Research');
@@ -247,9 +382,19 @@ try {
   const forming=await page.evaluate(()=>JSON.parse(localStorage.getItem('stardust-to-civilization:normal:v1')).state);
   assert.equal(forming.cosmos.protostars.length,1);
   assert.equal(forming.buildings.stableStar??0,0,'Buying a protostar does not grant a mature star');
+  const formingRing=playableWorld.locator('[data-process="protostar"]').first();
+  await formingRing.waitFor({state:'visible'});
+  const ringRemaining=Number(await formingRing.getAttribute('data-remaining'));
+  assert.ok(ringRemaining>0,'The scene exposes the real forming-star timer');
   await page.screenshot({path:'artifacts/desktop-protostar.png'});
-  await page.clock.fastForward(25000);
+  await page.clock.fastForward(5000);
+  const ringAfter=Number(await formingRing.getAttribute('data-remaining'));
+  const progressedStar=await storedState();
+  assert.ok(ringAfter<ringRemaining&&Math.abs(ringAfter-progressedStar.cosmos.protostars[0].remaining)<.5,'The scene ring advances with the actual hydrogen-fed simulation');
+  assert.ok(progressedStar.elapsed-forming.elapsed>=5&&progressedStar.elapsed-forming.elapsed<6,'Formation feedback uses ordinary elapsed time');
+  await page.clock.fastForward(20000);
   assert.equal(await page.locator('.protostar-timer').count(),0,'Fed protostar ignites');
+  assert.equal(await playableWorld.locator('[data-process="protostar"]').count(),0,'Ignition removes the completed formation ring');
   await purchase('Unlock Stellar observations','Research');
   await purchase('Build Gas cloud','Build');
   await purchase('Build Massive star','Build');
@@ -263,6 +408,7 @@ try {
   for(const name of ['Build accretion disk','Build rocky core','Build solid surface','Build atmosphere','Build oceans']) {
     await purchase(name,'World');
   }
+  await revealCard('planet-construction');
   await page.getByRole('heading',{name:'Your planetary system',exact:true}).waitFor();
   await openDetails('Change world profile');
   await (await revealControl(/^Ocean-rich world/)).click();
@@ -290,6 +436,7 @@ try {
   legacy.habitability=75;
   await reloadWithState(legacy);
   await section('World');
+  await revealCard('planet-construction');
   await page.getByRole('heading',{name:'Your planetary system',exact:true}).waitFor();
   await page.getByRole('button',{name:'Save progress',exact:true}).click();
   const migrated=await page.evaluate(()=>JSON.parse(localStorage.getItem('stardust-to-civilization:normal:v1')));
@@ -321,6 +468,7 @@ try {
   await guidedPhotosynthesis.locator('xpath=self::*[contains(@class, "guided-target")]').waitFor({state:'visible'});
   assert.equal(await guidedPhotosynthesis.evaluate(card=>card===document.activeElement||card.contains(document.activeElement)),true,'Guidance from an earlier chapter focuses the next biological milestone');
   results.push('Chapters remember their action tabs; Show next step switches chapters and focuses the relevant milestone');
+  await checkEvolutionSelection('Desktop');
   assert.equal(await (await revealControl('Unlock Human communities','Research')).isDisabled(),true);
   const humanDetails=page.locator('[data-card-id="humans"] details');
   await humanDetails.locator(':scope > summary').click();
@@ -330,7 +478,7 @@ try {
   await checkNavigationLocal('Desktop');
   await purchase('Unlock Photosynthetic producers','Research');
   await section('Build');
-  await page.getByRole('button',{name:'Build Producer habitat',exact:true}).waitFor({state:'visible'});
+  await (await revealControl('Build Producer habitat','Build')).waitFor({state:'visible'});
   await page.getByRole('button',{name:'Save progress',exact:true}).click();
   const beforeChapter=await page.evaluate(()=>JSON.parse(localStorage.getItem('stardust-to-civilization:developer:v1')).state);
   await page.getByRole('navigation',{name:'Game chapters'}).getByRole('button',{name:/The cosmos/}).click();
@@ -352,9 +500,26 @@ try {
   await page.getByRole('button',{name:'Close developer tools'}).click();
   await page.evaluate(()=>window.scrollTo(0,0));
   await checkGatherConsistency('Desktop');
+  const beforeSettlement=await storedState('developer');
+  await playableWorld.getByRole('button',{name:'Inspect Housing',exact:true}).click();
+  await page.locator('[data-card-id="house"]').waitFor({state:'visible'});
+  unchangedPurchases(beforeSettlement,await storedState('developer'),'Inspecting settlement housing is free');
+  await purchase('Build Housing','Build');
+  const afterSettlement=await storedState('developer');
+  assert.equal(afterSettlement.buildings.house,beforeSettlement.buildings.house+1,'The settlement inspector purchases an ordinary housing upgrade');
+  await playableWorld.locator(`[data-scene-object="house"][data-owned="${afterSettlement.buildings.house}"]`).waitFor({state:'visible'});
+  results.push('Settlement object selection is free and a legal housing purchase updates visible ownership');
   await page.screenshot({path:'artifacts/desktop-civilization.png'});
   await (await revealControl(/Observe ·/,'World')).click();
+  const healthBeforeTending=Number(await playableWorld.locator('.playable-scene').getAttribute('data-health'));
   await (await revealControl(/Tend biosphere/,'World')).click();
+  const healthAfterTending=Number(await playableWorld.locator('.playable-scene').getAttribute('data-health'));
+  const tended=await storedState('developer');
+  assert.ok(healthAfterTending>healthBeforeTending,'Settlement scenery responds to ordinary biosphere recovery');
+  assert.ok(Math.abs(healthAfterTending-tended.health)<=1,'Scene health derives from actual biosphere health');
+  results.push('Settlement scenery tracks biosphere health and responds to the free recovery action');
+  await checkBiosphereScenery(tended);
+  await checkBiosphereInspector('Desktop');
   assert.equal(await (await revealControl('Unlock Orbital Observatory','Research')).isDisabled(),true);
   console.log('Check passed');
   results.push('Civilization actions and final objective prerequisite lock');
@@ -367,7 +532,15 @@ try {
   await page.setViewportSize({width:390,height:844});
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:'artifacts/mobile-cosmos.png'});
+  await playableWorld.screenshot({path:'artifacts/mobile-cosmos-scene.png'});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile has no horizontal overflow');
+  const mobileCloud=playableWorld.getByRole('button',{name:'Gather hydrogen from cloud',exact:true});
+  const mobileCloudBounds=await mobileCloud.boundingBox();
+  assert.ok(mobileCloudBounds&&mobileCloudBounds.width>=44&&mobileCloudBounds.height>=44,'The mobile cloud has a large touch target');
+  const beforeMobileCloud=await storedState();
+  await mobileCloud.click();
+  assert.equal((await storedState()).stats.taps,beforeMobileCloud.stats.taps+1,'The mobile world gathers through the ordinary action');
+  results.push('390px mobile cloud remains directly playable with a large touch target');
   await page.getByRole('button',{name:'How to play'}).click();
   await page.getByRole('dialog').waitFor();
   await page.keyboard.press('Escape');
@@ -378,6 +551,7 @@ try {
   await page.getByRole('button',{name:'Close developer tools'}).click();
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:'artifacts/mobile-biology.png'});
+  await playableWorld.screenshot({path:'artifacts/mobile-biology-scene.png'});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile biology has no horizontal overflow');
   const mobileGoal=await page.locator('.next-milestone').boundingBox();
   const mobileWorld=await page.locator('.world-card').boundingBox();
@@ -392,6 +566,7 @@ try {
   assert.ok(targetBounds&&targetBounds.y>=0&&targetBounds.y<844,'Mobile guidance brings its highlighted target into the viewport');
   assert.ok(tabsBounds&&panelBounds&&tabsBounds.y>=0&&tabsBounds.y+tabsBounds.height<=panelBounds.y,'Mobile guidance shows the local tabs immediately before the action panel');
   await revealControl('Unlock Human communities','Research');
+  await checkEvolutionSelection('Mobile');
   await checkNavigationLocal('Mobile');
   console.log('Check passed');
   results.push('390px mobile cosmos/biology layout, touch controls, help dialog and Escape');
@@ -402,7 +577,14 @@ try {
   await page.evaluate(()=>window.scrollTo(0,0));
   await checkGatherConsistency('Mobile');
   await page.screenshot({path:'artifacts/mobile-civilization.png'});
+  await playableWorld.screenshot({path:'artifacts/mobile-civilization-scene.png'});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile civilization has no overflow');
+  const sceneCaption=await playableWorld.locator('.scene-footer').boundingBox();
+  for(const id of ['restoration','power']) {
+    const hotspot=await playableWorld.locator(`[data-scene-object="${id}"]`).boundingBox();
+    assert.ok(sceneCaption&&hotspot&&hotspot.y+hotspot.height<=sceneCaption.y,`Mobile ${id} remains clear of the scene caption`);
+  }
+  await checkBiosphereInspector('Mobile');
   if (existsSync('artifacts/legal-completion.json')) {
     const completed=JSON.parse(readFileSync('artifacts/legal-completion.json','utf8'));
     await page.setViewportSize({width:1440,height:1000});
@@ -415,7 +597,7 @@ try {
   }
   // Browser lifecycle: hidden production is caught up exactly once, even with hidden autosaves.
   await reloadWithState(saved.state);
-  await page.getByRole('button',{name:'Gather hydrogen'}).waitFor();
+  await page.getByRole('button',{name:'Gather hydrogen',exact:true}).waitFor();
   await page.getByRole('button',{name:'Save progress',exact:true}).click();
   await page.evaluate(()=>{window.__testHidden=true;Object.defineProperty(document,'hidden',{configurable:true,get:()=>window.__testHidden});document.dispatchEvent(new Event('visibilitychange'));});
   const beforeHidden=await page.evaluate(()=>JSON.parse(localStorage.getItem('stardust-to-civilization:normal:v1')));
@@ -455,7 +637,7 @@ try {
   memoryPage.on('pageerror',error=>errors.push(String(error)));
   await memoryPage.goto(process.env.GAME_URL??'http://127.0.0.1:5173/');
   await memoryPage.getByRole('alert').waitFor();
-  for(let n=0;n<15;n++) await memoryPage.getByRole('button',{name:'Gather hydrogen'}).click();
+  for(let n=0;n<15;n++) await memoryPage.getByRole('button',{name:'Gather hydrogen',exact:true}).click();
   await memoryPage.getByRole('button',{name:'Build Gas collector',exact:true}).click();
   await memoryPage.locator('summary').filter({hasText:'Settings'}).click();
   await memoryPage.getByRole('button',{name:'Developer tools',exact:true}).click();
@@ -467,4 +649,8 @@ try {
   assert.deepEqual(errors,[],'No browser console or page errors');
   console.log(JSON.stringify({passed:results,presentation,errors,screenshots:'artifacts/'},null,2));
   writeFileSync('artifacts/browser-report.json',JSON.stringify({passed:results,presentation,errors},null,2));
+} catch(error) {
+  await page.screenshot({path:'artifacts/browser-failure.png',fullPage:true}).catch(()=>{});
+  writeFileSync('artifacts/browser-report.json',JSON.stringify({passed:results,presentation,errors,failure:String(error)},null,2));
+  throw error;
 } finally { await browser.close(); }
